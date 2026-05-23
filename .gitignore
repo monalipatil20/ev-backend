@@ -35,4 +35,4 @@ build/
 # Misc
 .cache/
 .temp/
-temp/
+temp
