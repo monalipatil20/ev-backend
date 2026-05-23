@@ -2,8 +2,14 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
+const EMAIL_REGEX = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
 const userSchema = new mongoose.Schema(
   {
+    fullName: {
+      type: String,
+      trim: true,
+    },
     name: {
       type: String,
       required: [true, 'Name is required'],
@@ -16,6 +22,20 @@ const userSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
       index: true,
+      validate: {
+        validator: (value) => EMAIL_REGEX.test(String(value || '').trim().toLowerCase()),
+        message: 'Please provide a valid email address',
+      },
+    },
+    mobile: {
+      type: String,
+      trim: true,
+      index: true,
+      sparse: true,
+      validate: {
+        validator: (value) => !value || /^\d{10}$/.test(String(value).replace(/\D/g, '')),
+        message: 'Mobile must be a valid 10-digit number',
+      },
     },
     password: {
       type: String,
@@ -25,8 +45,21 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['user', 'admin', 'manager', 'staff'],
+      enum: ['user', 'admin', 'fleet_manager', 'dealer', 'franchise_owner', 'service_manager'],
       default: 'user',
+    },
+    profileImage: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    passwordResetToken: {
+      type: String,
+      select: false,
+    },
+    passwordResetExpiresAt: {
+      type: Date,
+      select: false,
     },
     isActive: {
       type: Boolean,
@@ -37,6 +70,22 @@ const userSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+userSchema.pre('validate', function normalizeNames(next) {
+  if (!this.name && this.fullName) {
+    this.name = this.fullName;
+  }
+
+  if (!this.fullName && this.name) {
+    this.fullName = this.name;
+  }
+
+  if (this.mobile) {
+    this.mobile = String(this.mobile).replace(/\D/g, '').slice(-10);
+  }
+
+  next();
+});
 
 // Hash passwords only when the password field is new or changed.
 userSchema.pre('save', async function savePassword(next) {

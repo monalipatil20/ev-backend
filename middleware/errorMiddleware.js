@@ -14,9 +14,20 @@ const errorMiddleware = (err, req, res, next) => {
 
   if (err.code === 11000) {
     statusCode = 409;
-    message = 'Duplicate resource detected';
-    code = 'DUPLICATE_KEY_ERROR';
+    if (err.keyPattern?.email || err.keyValue?.email) {
+      message = 'Email already exists';
+      code = 'USER_EXISTS';
+    } else {
+      message = 'Duplicate resource detected';
+      code = 'DUPLICATE_KEY_ERROR';
+    }
     details = err.keyValue;
+  }
+
+  if (err.name === 'MongoServerSelectionError' || err.name === 'MongoNetworkError' || err.code === 'ECONNREFUSED') {
+    statusCode = 503;
+    message = 'Database connection failed. Please try again shortly.';
+    code = 'DATABASE_CONNECTION_ERROR';
   }
 
   if (err.name === 'JsonWebTokenError') {

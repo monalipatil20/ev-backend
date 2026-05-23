@@ -14,6 +14,15 @@ const fleetRoutes = require('./routes/fleetRoutes');
 const showroomRoutes = require('./routes/showroomRoutes');
 const serviceRoutes = require('./routes/serviceRoutes');
 const gpsRoutes = require('./routes/gpsRoutes');
+const landingRoutes = require('./routes/landingRoutes');
+const userRoutes = require('./routes/userRoutes');
+const driverRoutes = require('./routes/driverRoutes');
+const tripRoutes = require('./routes/tripRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+const reportRoutes = require('./routes/reportRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
+const tokenRoutes = require('./routes/tokenRoutes');
+const uploadRoutes = require('./routes/uploadRoutes');
 const dealershipRoutes = require('./modules/dealership/dealership.routes');
 const apiRoutes = require('./routes');
 const ApiError = require('./utils/ApiError');
@@ -57,12 +66,23 @@ app.get('/health', (req, res) => {
 
 // Mount the versioned API routes after the shared middleware.
 app.use('/api/auth', authRoutes);
+app.use('/api/landing', landingRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api/charging', chargingRoutes);
 app.use('/api/cafe', cafeRoutes);
 app.use('/api/fleet', fleetRoutes);
+app.use('/api/vehicles', fleetRoutes);
+app.use('/api/drivers', driverRoutes);
+app.use('/api/trips', tripRoutes);
 app.use('/api/showroom', showroomRoutes);
 app.use('/api/service', serviceRoutes);
 app.use('/api/gps', gpsRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/tokens', tokenRoutes);
+app.use('/api/uploads', uploadRoutes);
+app.use('/api/dealership', dealershipRoutes);
 app.use('/api/franchise', dealershipRoutes);
 app.use(API_PREFIX, apiRoutes);
 

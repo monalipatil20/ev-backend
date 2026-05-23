@@ -5,12 +5,25 @@ const ApiError = require('../utils/ApiError');
 
 const createFleet = async (req, res, next) => {
   try {
-    const { vehicleName, vehicleNumber, batteryStatus, location, driverName, status } = req.body;
+    const {
+      vehicleName,
+      vehicleNumber,
+      batteryStatus,
+      location,
+      driverName,
+      status,
+      coordinates,
+      fleetManagerId,
+      driverIds,
+      vehicleKyc,
+      kycStatus,
+      shifts,
+    } = req.body;
 
-    if (!vehicleName || !vehicleNumber || batteryStatus === undefined || !location || !driverName) {
+    if (!vehicleName || !vehicleNumber || batteryStatus === undefined || !location) {
       throw new ApiError(
         400,
-        'vehicleName, vehicleNumber, batteryStatus, location, and driverName are required',
+        'vehicleName, vehicleNumber, batteryStatus, and location are required',
         'MISSING_FIELDS'
       );
     }
@@ -20,8 +33,14 @@ const createFleet = async (req, res, next) => {
       vehicleNumber,
       batteryStatus,
       location,
-      driverName,
+      driverName: driverName || 'Unassigned',
       status,
+      coordinates,
+      fleetManagerId,
+      driverIds,
+      vehicleKyc,
+      kycStatus,
+      shifts,
     });
 
     return res.status(201).json({
@@ -36,7 +55,7 @@ const createFleet = async (req, res, next) => {
 
 const getAllFleet = async (req, res, next) => {
   try {
-    const fleet = await Fleet.find().sort({ createdAt: -1 });
+    const fleet = await Fleet.find().populate('driverIds', 'driverName mobileNumber kycStatus shift shiftDuration').sort({ createdAt: -1 });
 
     return res.status(200).json({
       success: true,
@@ -81,7 +100,7 @@ const updateFleet = async (req, res, next) => {
     }
 
     const updates = {};
-    ['vehicleName', 'vehicleNumber', 'batteryStatus', 'location', 'driverName', 'status'].forEach((field) => {
+    ['vehicleName', 'vehicleNumber', 'batteryStatus', 'location', 'driverName', 'status', 'coordinates', 'fleetManagerId', 'driverIds', 'vehicleKyc', 'kycStatus', 'shifts'].forEach((field) => {
       if (req.body[field] !== undefined) {
         updates[field] = req.body[field];
       }

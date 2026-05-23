@@ -4,7 +4,7 @@ const dealershipSchema = new mongoose.Schema(
   {
     userId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Auth',
+      ref: 'User',
       required: true,
     },
     businessName: {

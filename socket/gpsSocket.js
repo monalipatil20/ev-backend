@@ -35,6 +35,38 @@ const emitVehicleLocationUpdate = (locationDocument) => {
   ioInstance.to(`vehicle:${payload.vehicleId}`).emit('gps:vehicle-location-updated', payload);
 };
 
+const emitChargingStatusUpdate = (payload) => {
+  if (!ioInstance) {
+    return;
+  }
+
+  ioInstance.emit('charging:status-updated', payload);
+};
+
+const emitAdminNotification = (payload) => {
+  if (!ioInstance) {
+    return;
+  }
+
+  ioInstance.emit('admin:notification', payload);
+};
+
+const emitTripUpdate = (payload) => {
+  if (!ioInstance) {
+    return;
+  }
+
+  ioInstance.emit('trip:updated', payload);
+};
+
+const emitLiveAnalytics = (payload) => {
+  if (!ioInstance) {
+    return;
+  }
+
+  ioInstance.emit('analytics:live', payload);
+};
+
 const getAllLatestVehicleLocations = async () => {
   const latestLocations = await VehicleLocation.aggregate([
     { $sort: { vehicleId: 1, timestamp: -1 } },
@@ -160,4 +192,8 @@ const initializeGpsSocket = (httpServer, corsOptions) => {
 module.exports = {
   initializeGpsSocket,
   emitVehicleLocationUpdate,
+  emitChargingStatusUpdate,
+  emitAdminNotification,
+  emitTripUpdate,
+  emitLiveAnalytics,
 };

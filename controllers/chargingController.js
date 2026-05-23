@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const ChargingStation = require('../models/ChargingStation');
 const ChargingBooking = require('../models/ChargingBooking');
 const ApiError = require('../utils/ApiError');
+const { emitChargingStatusUpdate, emitLiveAnalytics } = require('../socket/gpsSocket');
 const EARTH_RADIUS_KM = 6371;
 
 const toPositiveInteger = (value) => {
@@ -327,6 +328,21 @@ const bookSlot = async (req, res, next) => {
       station: station._id,
       user: req.user?._id,
       slotsBooked: requestedSlots,
+    });
+
+    emitChargingStatusUpdate({
+      stationId: String(station._id),
+      stationName: station.stationName,
+      availableSlots: station.availableSlots,
+      status: station.status,
+      bookingId: String(booking._id),
+    });
+
+    emitLiveAnalytics({
+      type: 'charging-booking',
+      stationId: String(station._id),
+      bookedSlots: requestedSlots,
+      timestamp: new Date().toISOString(),
     });
 
     return res.status(201).json({

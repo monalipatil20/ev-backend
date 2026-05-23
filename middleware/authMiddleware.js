@@ -39,7 +39,22 @@ const adminOnly = (req, res, next) => {
   return next();
 };
 
+const authorizeRoles = (...allowedRoles) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return next(new ApiError(401, 'Authentication required', 'UNAUTHENTICATED'));
+    }
+
+    if (!allowedRoles.includes(req.user.role)) {
+      return next(new ApiError(403, 'Access denied for this role', 'ROLE_FORBIDDEN'));
+    }
+
+    return next();
+  };
+};
+
 module.exports = {
   protect,
   adminOnly,
+  authorizeRoles,
 };
