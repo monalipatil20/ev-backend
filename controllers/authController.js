@@ -1,5 +1,6 @@
 // Authentication controller for registering users, logging them in, and returning profile data.
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const AuthOtp = require('../models/AuthOtp');
 const ApiError = require('../utils/ApiError');
@@ -27,11 +28,20 @@ const allowedRoles = ['user', 'admin', 'fleet_manager', 'dealer', 'franchise_own
 
 const generateOtpCode = () => String(Math.floor(100000 + Math.random() * 900000));
 
+const isBcryptHash = (value) => typeof value === 'string' && /^\$2[aby]?\$/.test(value);
+
 const registerUser = async (req, res, next) => {
   try {
     const { fullName, name, email, mobile, password, role, profileImage } = req.body;
     const displayName = fullName || name;
     const normalizedEmail = normalizeEmail(email);
+
+    console.log('[AUTH][REGISTER] Incoming request', {
+      email: normalizedEmail,
+      hasName: Boolean(displayName),
+      hasMobile: Boolean(mobile),
+      role,
+    });
 
     if (!displayName || !email || !password) {
       throw new ApiError(400, 'Name, email, and password are required', 'MISSING_FIELDS');
@@ -47,12 +57,19 @@ const registerUser = async (req, res, next) => {
 
     const normalizedRole = role && allowedRoles.includes(role) ? role : 'user';
 
+    console.log('[AUTH][REGISTER] Checking existing user', normalizedEmail);
     const existingUser = await User.findOne({ email: normalizedEmail });
 
     if (existingUser) {
-      throw new ApiError(409, 'Email already exists', 'USER_EXISTS');
+      console.log('[AUTH][REGISTER] User already exists', normalizedEmail);
+      return res.status(409).json({
+        success: false,
+        code: 'USER_EXISTS',
+        message: 'Email already exists',
+      });
     }
 
+    console.log('[AUTH][REGISTER] Creating user in MongoDB', normalizedEmail);
     const user = await User.create({
       fullName: displayName,
       name: displayName,
@@ -71,8 +88,14 @@ const registerUser = async (req, res, next) => {
     });
   } catch (error) {
     if (error?.code === 11000 && error?.keyPattern?.email) {
-      return next(new ApiError(409, 'Email already exists', 'USER_EXISTS'));
+      console.log('[AUTH][REGISTER] Duplicate email key error', email);
+      return res.status(409).json({
+        success: false,
+        code: 'USER_EXISTS',
+        message: 'Email already exists',
+      });
     }
+    console.error('[AUTH][REGISTER] Failed', error.message);
     return next(error);
   }
 };
@@ -82,6 +105,11 @@ const loginUser = async (req, res, next) => {
     const { email, password } = req.body;
     const normalizedEmail = normalizeEmail(email);
 
+    console.log('[AUTH][LOGIN] Attempt', {
+      email: normalizedEmail,
+      hasPassword: Boolean(password),
+    });
+
     if (!email || !password) {
       throw new ApiError(400, 'Email and password are required', 'MISSING_FIELDS');
     }
@@ -90,9 +118,11 @@ const loginUser = async (req, res, next) => {
       throw new ApiError(400, 'Please enter a valid email address', 'INVALID_EMAIL');
     }
 
+    console.log('[AUTH][LOGIN] MongoDB query for user', normalizedEmail);
     const user = await User.findOne({ email: normalizedEmail }).select('+password');
 
     if (!user) {
+      console.log('[AUTH][LOGIN] No user found', normalizedEmail);
       throw new ApiError(401, 'Invalid credentials', 'INVALID_CREDENTIALS');
     }
 
@@ -100,11 +130,26 @@ const loginUser = async (req, res, next) => {
       throw new ApiError(403, 'This account is inactive', 'ACCOUNT_INACTIVE');
     }
 
-    const isMatch = await user.matchPassword(password);
+    console.log('[AUTH][LOGIN] Comparing password with bcrypt', normalizedEmail);
+    let isMatch = false;
+
+    if (isBcryptHash(user.password)) {
+      isMatch = await bcrypt.compare(password, user.password);
+    } else {
+      isMatch = user.password === password;
+      if (isMatch) {
+        console.log('[AUTH][LOGIN] Legacy plaintext password matched, migrating to bcrypt', normalizedEmail);
+        user.password = password;
+        await user.save();
+      }
+    }
 
     if (!isMatch) {
+      console.log('[AUTH][LOGIN] Password mismatch', normalizedEmail);
       throw new ApiError(401, 'Invalid credentials', 'INVALID_CREDENTIALS');
     }
+
+    console.log('[AUTH][LOGIN] Login successful', normalizedEmail);
 
     return res.status(200).json({
       success: true,

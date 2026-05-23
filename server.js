@@ -5,6 +5,8 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const http = require('http');
 const path = require('path');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
 
 const { connectDB, closeDB } = require('./config/db');
 const authRoutes = require('./routes/authRoutes');
@@ -30,8 +32,97 @@ const errorMiddleware = require('./middleware/errorMiddleware');
 const { initializeGpsSocket } = require('./socket/gpsSocket');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 const API_PREFIX = process.env.API_PREFIX || '/api/v1';
+const execFileAsync = promisify(execFile);
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const getListeningPids = async (port) => {
+  try {
+    if (process.platform === 'win32') {
+      const { stdout } = await execFileAsync('cmd', ['/c', `netstat -ano -p tcp | findstr :${port}`]);
+      return stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .filter((line) => /LISTENING|LISTEN/.test(line))
+        .map((line) => {
+          const match = line.match(/\s(\d+)$/);
+          return match ? match[1] : null;
+        })
+        .filter(Boolean);
+    }
+
+    const { stdout } = await execFileAsync('sh', ['-lc', `lsof -ti tcp:${port}`]);
+    return stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+  } catch (error) {
+    return [];
+  }
+};
+
+const killPid = async (pid) => {
+  try {
+    if (process.platform === 'win32') {
+      await execFileAsync('taskkill', ['/PID', String(pid), '/T', '/F']);
+      return true;
+    }
+
+    await execFileAsync('kill', ['-TERM', String(pid)]);
+    return true;
+  } catch (error) {
+    console.warn(`[PORT] Could not stop PID ${pid}: ${error.message}`);
+    return false;
+  }
+};
+
+const freePort = async (port) => {
+  const pids = await getListeningPids(port);
+
+  if (!pids.length) {
+    return false;
+  }
+
+  console.log(`[PORT] Port ${port} is in use by PID(s): ${pids.join(', ')}`);
+
+  for (const pid of pids) {
+    await killPid(pid);
+  }
+
+  await delay(500);
+
+  const remaining = await getListeningPids(port);
+  if (remaining.length) {
+    throw new Error(`Port ${port} is still busy after cleanup: ${remaining.join(', ')}`);
+  }
+
+  console.log(`[PORT] Port ${port} is now free`);
+  return true;
+};
+
+const listenOnPort = (port) => {
+  return new Promise((resolve, reject) => {
+    const server = http.createServer(app);
+    initializeGpsSocket(server, corsOptions);
+
+    const onError = (error) => {
+      server.off('listening', onListening);
+      reject(error);
+    };
+
+    const onListening = () => {
+      server.off('error', onError);
+      resolve(server);
+    };
+
+    server.once('error', onError);
+    server.once('listening', onListening);
+    server.listen(port);
+  });
+};
 
 // Keep the CORS setup flexible enough for Expo development and production hosts.
 const corsOrigin = process.env.CORS_ORIGIN;
@@ -98,20 +189,58 @@ const startServer = async () => {
   try {
     await connectDB();
 
-    const httpServer = http.createServer(app);
-    initializeGpsSocket(httpServer, corsOptions);
-
-    const server = httpServer.listen(PORT, () => {
-      console.log('\n═══════════════════════════════════════════════════════════');
-      console.log('🚀 EV CHARGING BACKEND STARTED SUCCESSFULLY');
-      console.log('═══════════════════════════════════════════════════════════');
-      console.log(`📌 Server is running on: http://localhost:${PORT}`);
-      console.log(`📌 Socket.IO endpoint: ws://localhost:${PORT}`);
-      console.log(`📌 API Prefix: ${API_PREFIX}`);
-      console.log(`📌 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`📌 MongoDB URI: ${process.env.MONGODB_URI || 'not configured'}`);
-      console.log('═══════════════════════════════════════════════════════════\n');
+    await freePort(PORT).catch((error) => {
+      console.warn(`[PORT] Could not auto-free ${PORT}: ${error.message}`);
     });
+
+    let server;
+    let activePort = PORT;
+
+    try {
+      server = await listenOnPort(activePort);
+    } catch (error) {
+      if (error.code === 'EADDRINUSE') {
+        console.warn(`[PORT] ${activePort} still in use, retrying after cleanup...`);
+        await freePort(activePort);
+
+        try {
+          server = await listenOnPort(activePort);
+        } catch (retryError) {
+          console.warn(`[PORT] Port ${activePort} still unavailable, switching to next free port.`);
+
+          for (let fallbackPort = Number(PORT) + 1; fallbackPort <= Number(PORT) + 10; fallbackPort += 1) {
+            try {
+              await freePort(fallbackPort).catch(() => {});
+              server = await listenOnPort(fallbackPort);
+              activePort = fallbackPort;
+              break;
+            } catch (fallbackError) {
+              if (fallbackPort === Number(PORT) + 10) {
+                throw fallbackError;
+              }
+            }
+          }
+        }
+      } else {
+        throw error;
+      }
+    }
+
+    if (!server) {
+      throw new Error(`Unable to start server on port ${PORT}`);
+    }
+
+    console.log('\n═══════════════════════════════════════════════════════════');
+    console.log('🚀 EV CHARGING BACKEND STARTED SUCCESSFULLY');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log(`📌 MongoDB connected`);
+    console.log(`📌 Server running on port ${activePort}`);
+    console.log(`📌 Server URL: http://localhost:${activePort}`);
+    console.log(`📌 Socket.IO endpoint: ws://localhost:${activePort}`);
+    console.log(`📌 API Prefix: ${API_PREFIX}`);
+    console.log(`📌 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`📌 MongoDB URI: ${process.env.MONGODB_URI || 'not configured'}`);
+    console.log('═══════════════════════════════════════════════════════════\n');
 
     const shutdown = async (signal) => {
       console.log(`${signal} received: closing server`);
@@ -124,6 +253,16 @@ const startServer = async () => {
 
     process.on('SIGTERM', () => shutdown('SIGTERM'));
     process.on('SIGINT', () => shutdown('SIGINT'));
+
+    server.on('error', (error) => {
+      if (error.code === 'EADDRINUSE') {
+        console.error(`[SERVER] Port ${activePort} is already in use.`);
+        return;
+      }
+
+      console.error('[SERVER] Failed to start HTTP listener:', error);
+      process.exit(1);
+    });
   } catch (error) {
     console.error('Failed to start backend:', error.message);
     process.exit(1);

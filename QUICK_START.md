@@ -16,12 +16,6 @@ npm install
 mongod
 ```
 
-**Option B: MongoDB Atlas (Cloud)**
-1. Go to https://www.mongodb.com/cloud/atlas
-2. Create free account
-3. Create cluster and get connection string
-4. Update `.env` with your connection string
-
 ### Step 3: Configure Environment
 The `.env` file is already created with default values:
 ```env

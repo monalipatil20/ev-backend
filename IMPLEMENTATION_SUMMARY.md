@@ -355,7 +355,7 @@ PORT=3001  # Run on different port
 
 ### Change Database
 ```env
-MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/energeia
+MONGODB_URI=mongodb://127.0.0.1:27017/energeia
 ```
 
 ### Change CORS Origin
@@ -365,24 +365,23 @@ CORS_ORIGIN=https://yourdomain.com
 
 ---
 
-## 🚀 Deployment Steps
+## 🚀 Local Development
 
-### 1. Local Development
+### 1. Start the Server
 ```bash
 npm run dev
 ```
 
-### 2. Test Before Deploy
+### 2. Verify Locally
 ```bash
 npm start
 ```
 
-### 3. Production Deployment
-- Update `.env` with production values
-- Set `NODE_ENV=production`
-- Use MongoDB Atlas or managed database
-- Deploy to Heroku, AWS, GCP, or similar
-- Update frontend API URLs
+### 3. Local-Only Setup
+- Keep `.env` pointed at `mongodb://127.0.0.1:27017/energeia`
+- Set `NODE_ENV=development`
+- Run the backend locally with `npm run dev`
+- Keep frontend API URLs pointed at the emulator backend
 
 ---
 
