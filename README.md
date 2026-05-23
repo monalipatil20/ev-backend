@@ -173,6 +173,28 @@ npm start
 - 🌐 http://localhost:5000
 - 📊 Health Check: http://localhost:5000/health
 
+## ☁️ Deploying to Render
+
+This repository includes a Render blueprint at the project root in [render.yaml](../render.yaml). It configures the backend service to run from the `backend` folder with `npm install` and `npm start`.
+
+### Render setup
+
+1. Push the repository to GitHub.
+2. In Render, create a new Blueprint and point it at the repo root.
+3. Set these environment variables in the Render service settings:
+  - `MONGODB_URI`
+  - `JWT_SECRET`
+  - `JWT_EXPIRY` if you want something other than `7d`
+  - `CORS_ORIGIN` with your Expo app and any web frontend domains
+  - `API_PREFIX` if you want to override `/api/v1`
+4. Deploy the service.
+
+### Notes
+
+- The backend already listens on `process.env.PORT`, which Render injects automatically.
+- Use the `/health` endpoint as the Render health check.
+- If your frontend is on a different domain, add it to `CORS_ORIGIN` as a comma-separated list.
+
 ## 📡 API Endpoints
 
 ### Base URL
