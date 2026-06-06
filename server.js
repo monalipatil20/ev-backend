@@ -9,6 +9,7 @@ const { execFile } = require('child_process');
 const { promisify } = require('util');
 
 const { connectDB, closeDB } = require('./config/db');
+const appConfig = require('./config/env');
 const authRoutes = require('./routes/authRoutes');
 const chargingRoutes = require('./routes/chargingRoutes');
 const cafeRoutes = require('./routes/cafeRoutes');
@@ -32,8 +33,8 @@ const errorMiddleware = require('./middleware/errorMiddleware');
 const { initializeGpsSocket } = require('./socket/gpsSocket');
 
 const app = express();
-const PORT = process.env.PORT || 5001;
-const API_PREFIX = process.env.API_PREFIX || '/api/v1';
+const PORT = appConfig.server.port;
+const API_PREFIX = appConfig.server.apiPrefix;
 const execFileAsync = promisify(execFile);
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -125,15 +126,11 @@ const listenOnPort = (port) => {
 };
 
 // Keep the CORS setup flexible enough for Expo development and production hosts.
-const corsOrigin = process.env.CORS_ORIGIN;
-const corsOptions = {
-  origin: !corsOrigin || corsOrigin === '*' ? true : corsOrigin.split(',').map((value) => value.trim()),
-  credentials: true,
-};
+const corsOptions = appConfig.cors;
 
 // Core middleware for JSON payloads, form submissions, and cross-origin requests.
 app.use(cors(corsOptions));
-app.use(express.json({ limit: process.env.JSON_LIMIT || '1mb' }));
+app.use(express.json({ limit: appConfig.json.limit }));
 app.use(express.urlencoded({ extended: true }));
 
 // Serve uploaded assets when the project starts storing media files.
@@ -233,13 +230,13 @@ const startServer = async () => {
     console.log('\n═══════════════════════════════════════════════════════════');
     console.log('🚀 EV CHARGING BACKEND STARTED SUCCESSFULLY');
     console.log('═══════════════════════════════════════════════════════════');
-    console.log(`📌 MongoDB connected`);
+    console.log(`📌 Environment: ${appConfig.server.env.toUpperCase()}`);
+    console.log(`📌 MongoDB connected: ${appConfig.database.uri.replace(/:[^:@]+@/, ':***@')}`);
     console.log(`📌 Server running on port ${activePort}`);
     console.log(`📌 Server URL: http://localhost:${activePort}`);
     console.log(`📌 Socket.IO endpoint: ws://localhost:${activePort}`);
     console.log(`📌 API Prefix: ${API_PREFIX}`);
-    console.log(`📌 Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`📌 MongoDB URI: ${process.env.MONGODB_URI || 'not configured'}`);
+    console.log(`📌 CORS Origins: ${appConfig.cors.origin.join(', ')}`);
     console.log('═══════════════════════════════════════════════════════════\n');
 
     const shutdown = async (signal) => {
